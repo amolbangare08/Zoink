@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 100" fill="none" stroke="currentColor"
+     stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+  <title>ZOINK!</title>
+  <!-- the clip -->
+  <rect x="6" y="10" width="74" height="52" rx="10"/>
+  <!-- the zap that yanks it down -->
+  <path d="M46 18 30 40h11l-5 18 18-22H43z" fill="currentColor" stroke="none"/>
+  <!-- speed lines -->
+  <path d="M92 24h20M92 36h14M92 48h20"/>
+  <!-- dropped onto the timeline -->
+  <path d="M43 66v14M36 74l7 7 7-7"/>
+  <path d="M6 92h108"/>
+</svg>

@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ZOINK!</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="view-main">
+  <header class="masthead">
+    <div class="brand">
+      <div class="logo" id="logo-slot"></div>
+      <div class="brand-text">
+        <h1>ZOINK!</h1>
+        <p class="subtitle">for premiere pro</p>
+      </div>
+    </div>
+    <div class="masthead-right">
+      <span class="status-pill" id="status-pill">starting</span>
+      <button class="icon-button" id="btn-settings" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3.2"/>
+          <path d="M19.4 15a1.6 1.6 0 0 0 .32 1.77l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.6 1.6 0 0 0-1.77-.32 1.6 1.6 0 0 0-1 1.47V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.77.32l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.6 1.6 0 0 0 4.72 15a1.6 1.6 0 0 0-1.47-1H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.32-1.77l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.6 1.6 0 0 0 9 4.72h.08A1.6 1.6 0 0 0 10 3.25V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.47 1.6 1.6 0 0 0 1.77-.32l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.6 1.6 0 0 0 19.28 9v.08a1.6 1.6 0 0 0 1.47 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="rule"></div>
+
+  <ol class="steps" id="steps">
+    <li class="step" data-step="fetch"><span class="step-index">01</span><span class="step-label">Fetch</span></li>
+    <li class="step" data-step="encode"><span class="step-index">02</span><span class="step-label">Encode</span></li>
+    <li class="step" data-step="timeline"><span class="step-index">03</span><span class="step-label">Timeline</span></li>
+  </ol>
+
+  <div class="rail"><div class="rail-fill" id="rail-fill"></div></div>
+
+  <p class="headline" id="headline">Paste a link to begin.</p>
+
+  <section class="preview" id="preview" hidden>
+    <img id="preview-thumb" alt="">
+    <div class="preview-meta">
+      <p class="preview-title" id="preview-title"></p>
+      <p class="preview-by" id="preview-by"></p>
+      <div class="chips" id="preview-chips"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <label class="field">
+      <span class="field-label">Video link</span>
+      <input type="text" id="input-url" spellcheck="false" autocomplete="off"
+             placeholder="https://www.youtube.com/watch?v=…">
+    </label>
+
+    <div class="field-row">
+      <label class="field">
+        <span class="field-label">In point <em>(optional)</em></span>
+        <input type="text" id="input-in" spellcheck="false" autocomplete="off" placeholder="0:00">
+      </label>
+      <label class="field">
+        <span class="field-label">Out point <em>(optional)</em></span>
+        <input type="text" id="input-out" spellcheck="false" autocomplete="off" placeholder="1:23:45">
+      </label>
+    </div>
+
+    <div class="field-row">
+      <label class="field">
+        <span class="field-label">Max quality</span>
+        <div class="select-wrap">
+          <select id="input-quality">
+            <option value="best">Best available</option>
+            <option value="2160">Up to 2160p</option>
+            <option value="1440">Up to 1440p</option>
+            <option value="1080">Up to 1080p</option>
+            <option value="720">Up to 720p</option>
+            <option value="480">Up to 480p</option>
+          </select>
+        </div>
+      </label>
+      <label class="field">
+        <span class="field-label">Insert clip at</span>
+        <div class="select-wrap">
+          <select id="input-insert">
+            <option value="append">Append to end of sequence</option>
+            <option value="playhead-overwrite">Playhead (overwrite)</option>
+            <option value="playhead-insert">Playhead (insert &amp; ripple)</option>
+            <option value="bin-only">Bin only — no timeline</option>
+          </select>
+        </div>
+      </label>
+    </div>
+
+    <div class="actions">
+      <button class="button primary" id="btn-zoink">Zoink to timeline</button>
+      <button class="button ghost" id="btn-folder">Open folder</button>
+    </div>
+  </section>
+
+  <section class="console" id="console" tabindex="0"></section>
+
+  <footer class="footer">
+    <span class="version-chip">ZOINK! v1.0.1</span>
+    <p class="legal">
+      Fetch only videos you own or are licensed to download. Most platforms' terms
+      restrict downloading, and this tool does not bypass DRM.
+    </p>
+  </footer>
+</div>
+
+<div id="view-settings" hidden>
+  <header class="masthead">
+    <div class="brand-text">
+      <h1 class="settings-title">Settings</h1>
+      <p class="subtitle">zoink configuration</p>
+    </div>
+    <button class="icon-button" id="btn-close-settings" title="Back" aria-label="Back">
+      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 6 6 18M6 6l12 12"/>
+      </svg>
+    </button>
+  </header>
+
+  <div class="rule"></div>
+
+  <section class="card">
+    <label class="field">
+      <span class="field-label">Download folder</span>
+      <div class="field-inline">
+        <input type="text" id="set-folder" spellcheck="false"
+               placeholder="Next to the Premiere project">
+        <button class="button ghost small" id="btn-browse">Browse</button>
+      </div>
+      <span class="hint" id="hint-folder"></span>
+    </label>
+
+    <label class="field">
+      <span class="field-label">Bin name</span>
+      <input type="text" id="set-bin" spellcheck="false" placeholder="ZOINK!">
+    </label>
+
+    <label class="toggle">
+      <input type="checkbox" id="set-frame-accurate">
+      <span>Frame-accurate cuts</span>
+      <em>Re-encodes cut boundaries so in/out land exactly. Slower.</em>
+    </label>
+
+    <label class="toggle">
+      <input type="checkbox" id="set-hardware">
+      <span>Hardware encode (NVENC)</span>
+      <em id="hint-nvenc">Much faster conforming on an NVIDIA GPU.</em>
+    </label>
+
+    <label class="toggle">
+      <input type="checkbox" id="set-keep-original">
+      <span>Keep original download</span>
+      <em>Keeps the pre-conform file next to the finished clip.</em>
+    </label>
+
+    <label class="toggle">
+      <input type="checkbox" id="set-cookies">
+      <span>Use browser cookies</span>
+      <em>Needed for private or age-restricted Instagram and TikTok posts.</em>
+    </label>
+
+    <label class="field">
+      <span class="field-label">Cookie browser</span>
+      <div class="select-wrap">
+        <select id="set-cookie-browser">
+          <option value="chrome">Chrome</option>
+          <option value="edge">Edge</option>
+          <option value="firefox">Firefox</option>
+          <option value="brave">Brave</option>
+          <option value="opera">Opera</option>
+          <option value="vivaldi">Vivaldi</option>
+          <option value="safari">Safari</option>
+        </select>
+      </div>
+    </label>
+
+    <label class="field">
+      <span class="field-label">Proxy <em>(optional)</em></span>
+      <input type="text" id="set-proxy" spellcheck="false" placeholder="http://host:port">
+    </label>
+  </section>
+
+  <section class="card">
+    <h2 class="card-title">Tools</h2>
+    <div class="tool-list" id="tool-list"></div>
+    <div class="actions">
+      <button class="button ghost" id="btn-update">Check for yt-dlp updates</button>
+      <button class="button ghost" id="btn-copy-log">Copy log</button>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <span class="version-chip" id="settings-path"></span>
+  </footer>
+</div>
+
+<script src="vendor/CSInterface.js"></script>
+<script src="pipeline/proc.js"></script>
+<script src="pipeline/tools.js"></script>
+<script src="pipeline/timecode.js"></script>
+<script src="pipeline/errors.js"></script>
+<script src="pipeline/probe.js"></script>
+<script src="pipeline/download.js"></script>
+<script src="pipeline/conform.js"></script>
+<script src="log.js"></script>
+<script src="settings.js"></script>
+<script src="host-bridge.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

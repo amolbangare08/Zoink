@@ -1,0 +1,11 @@
+bin/*.exe
+bin/*.dll
+bin/yt-dlp
+bin/ffmpeg
+bin/ffprobe
+dist/
+*.zxp
+*.p12
+node_modules/
+.DS_Store
+Thumbs.db

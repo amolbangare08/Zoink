@@ -719,11 +719,17 @@
           ((error && (error.friendly || error.message)) || "");
 
         var browser = settings.useCookies ? null : firstInstalledBrowser();
+        // `tryCookies` is an explicit request from a step that already exhausted
+        // its own fallbacks, for failures whose text does not look like an auth
+        // wall but whose cause turns out to be one.
+        var worthRetrying =
+          errorsModule.isAuthWall(signature) || error.tryCookies === true;
+
         if (
           cancelled ||
           !browser ||
           /cancelled/i.test(signature) ||
-          !errorsModule.isAuthWall(signature)
+          !worthRetrying
         ) {
           throw error;
         }

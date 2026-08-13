@@ -17,9 +17,9 @@
 
   var fs = proc.require("fs");
   var path = proc.require("path");
+  var os = proc.require("os");
 
   var PROGRESS_PREFIX = "YKP|";
-  var FILEPATH_PREFIX = "YKF|";
 
   function formatSelector(maxHeight) {
     if (!maxHeight || maxHeight === "best") {
@@ -78,8 +78,14 @@
         "%(progress.downloaded_bytes)s|%(progress.total_bytes)s|" +
         "%(progress.total_bytes_estimate)s|%(progress.speed)s|" +
         "%(progress.eta)s|%(progress.status)s",
-      "--print",
-      "after_move:" + FILEPATH_PREFIX + "%(filepath)s",
+      // The finished path goes to a sidecar file, never to stdout. yt-dlp encodes
+      // console output with errors='ignore', so on a Windows cp1252 console every
+      // character outside the code page is silently dropped — and yt-dlp's own
+      // filename sanitiser produces exactly such characters (| becomes U+FF5C).
+      // The path printed to a file is written as UTF-8 and survives intact.
+      "--print-to-file",
+      "after_move:%(filepath)s",
+      options.sidecarPath,
       "-o",
       outputTemplate(options.workDir, options.inSeconds, options.outSeconds)
     ];
@@ -102,15 +108,68 @@
     return isFinite(value) && value > 0 ? value : 0;
   }
 
+  /** The path yt-dlp wrote to its sidecar file, read back as UTF-8. */
+  function readSidecar(sidecarPath) {
+    try {
+      var text = fs.readFileSync(sidecarPath, "utf8").trim();
+      if (!text.length) {
+        return null;
+      }
+      // The file is appended to, so the last line is this run's output.
+      var lines = text.split(/\r?\n/);
+      return lines[lines.length - 1].trim() || null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  /**
+   * Last resort: the newest finished file the run left in the folder. Filenames
+   * coming back through the console are lossy, so this catches the case where
+   * every reported path is unusable but the download itself worked.
+   */
+  function newestFileSince(workDir, sinceMs) {
+    var best = null;
+    var bestTime = 0;
+    try {
+      fs.readdirSync(workDir).forEach(function (name) {
+        if (/\.(part|ytdl|temp)$/i.test(name)) {
+          return;
+        }
+        var full = path.join(workDir, name);
+        var stat;
+        try {
+          stat = fs.statSync(full);
+        } catch (error) {
+          return;
+        }
+        if (!stat.isFile()) {
+          return;
+        }
+        var modified = stat.mtimeMs || stat.mtime.getTime();
+        if (modified >= sinceMs && modified > bestTime) {
+          best = full;
+          bestTime = modified;
+        }
+      });
+    } catch (error) {
+      return null;
+    }
+    return best;
+  }
+
   /**
    * yt-dlp announces the finished file in several ways depending on whether it
-   * merged, remuxed, or skipped an already-present download. Check them in order of
-   * how authoritative they are.
+   * merged, remuxed, or skipped an already-present download. The sidecar is the
+   * only lossless source; the console patterns below can have characters stripped
+   * by the Windows code page, so they are checked for existence before use.
    */
-  function resolveOutputPath(printed, stdout, stderr) {
-    if (printed) {
-      return printed;
+  function resolveOutputPath(sidecarPath, stdout, stderr, workDir, startedAt) {
+    var fromSidecar = readSidecar(sidecarPath);
+    if (fromSidecar && fs.existsSync(fromSidecar)) {
+      return fromSidecar;
     }
+
     var all = String(stdout || "") + "\n" + String(stderr || "");
     var patterns = [
       /\[Merger\] Merging formats into "([^"]+)"/,
@@ -120,11 +179,12 @@
     ];
     for (var i = 0; i < patterns.length; i++) {
       var match = all.match(patterns[i]);
-      if (match) {
+      if (match && fs.existsSync(match[1].trim())) {
         return match[1].trim();
       }
     }
-    return null;
+
+    return newestFileSince(workDir, startedAt);
   }
 
   /**
@@ -151,82 +211,170 @@
       );
     }
 
-    // A merged download reports progress for the video stream and then the audio
-    // stream, so a naive percentage would run 0-100 twice.
-    var expectedFiles = options.maxHeight === "audio" ? 1 : 2;
-    var completedFiles = 0;
-    var printedPath = null;
+    var sidecarPath = path.join(
+      os.tmpdir(),
+      "zoink-" + Date.now() + "-" + Math.floor(Math.random() * 100000) + ".path"
+    );
+    var hasRange = options.inSeconds !== null || options.outSeconds !== null;
+    var cancelled = false;
+    var current = null;
     var lastBytes = 0;
 
-    function handleLine(line) {
-      if (line.indexOf(PROGRESS_PREFIX) === 0) {
-        var parts = line.slice(PROGRESS_PREFIX.length).split("|");
-        var downloaded = toNumber(parts[0]);
-        var total = toNumber(parts[1]) || toNumber(parts[2]);
-        var speed = toNumber(parts[3]);
-        var eta = toNumber(parts[4]);
-        var status = parts[5];
+    function attempt(frameAccurate) {
+      // Allow a little slack: the merged file can carry a timestamp from just
+      // before the process was spawned.
+      var startedAt = Date.now() - 5000;
 
-        lastBytes = downloaded;
-        if (status === "finished") {
-          completedFiles = Math.min(completedFiles + 1, expectedFiles);
+      // A merged download reports progress for the video stream and then the
+      // audio stream, so a naive percentage would run 0-100 twice.
+      var expectedFiles = options.maxHeight === "audio" ? 1 : 2;
+      var completedFiles = 0;
+
+      try {
+        fs.unlinkSync(sidecarPath);
+      } catch (error) {
+        /* not there yet, which is the normal case */
+      }
+
+      function handleLine(line) {
+        if (line.indexOf(PROGRESS_PREFIX) === 0) {
+          var parts = line.slice(PROGRESS_PREFIX.length).split("|");
+          var downloaded = toNumber(parts[0]);
+          var total = toNumber(parts[1]) || toNumber(parts[2]);
+          var speed = toNumber(parts[3]);
+          var eta = toNumber(parts[4]);
+          var status = parts[5];
+
+          lastBytes = downloaded;
+          if (status === "finished") {
+            completedFiles = Math.min(completedFiles + 1, expectedFiles);
+          }
+
+          var fileFraction = total ? Math.min(downloaded / total, 1) : 0;
+          var overall = Math.min(
+            (completedFiles + fileFraction) / expectedFiles,
+            1
+          );
+          if (options.onProgress) {
+            options.onProgress(overall, {
+              downloaded: downloaded,
+              total: total,
+              speed: speed,
+              eta: eta
+            });
+          }
+          return;
         }
 
-        var fileFraction = total ? Math.min(downloaded / total, 1) : 0;
-        var overall = Math.min(
-          (completedFiles + fileFraction) / expectedFiles,
-          1
+        if (options.onLog) {
+          options.onLog(line);
+        }
+      }
+
+      var running = proc.run(
+        ytdlp,
+        buildArgs({
+          url: options.url,
+          workDir: options.workDir,
+          maxHeight: options.maxHeight,
+          inSeconds: options.inSeconds,
+          outSeconds: options.outSeconds,
+          frameAccurate: frameAccurate,
+          settings: options.settings,
+          sidecarPath: sidecarPath
+        }),
+        { onStdout: handleLine, onStderr: handleLine }
+      );
+      current = running;
+
+      return running.then(function (result) {
+        if (cancelled || result.signal || result.code === null) {
+          throw probeModule.makeError("Cancelled.", "");
+        }
+
+        if (result.code !== 0) {
+          var raw = String(result.stderr || "") + "\n" + String(result.stdout || "");
+
+          // --force-keyframes-at-cuts re-encodes the cut boundaries, and that
+          // encode can crash outright on some sources. A keyframe-aligned cut is
+          // far better than no clip at all, so signal a retry rather than failing.
+          if (frameAccurate && hasRange && /ffmpeg exited with code/i.test(raw)) {
+            var retryError = probeModule.makeError(
+              "Frame-accurate cutting crashed ffmpeg.",
+              errors.firstErrorLine(raw)
+            );
+            retryError.keyframeRetry = true;
+            throw retryError;
+          }
+
+          throw probeModule.makeError(
+            errors.explain(raw, "The download failed."),
+            errors.firstErrorLine(raw)
+          );
+        }
+
+        var filePath = resolveOutputPath(
+          sidecarPath,
+          result.stdout,
+          result.stderr,
+          options.workDir,
+          startedAt
         );
-        if (options.onProgress) {
-          options.onProgress(overall, {
-            downloaded: downloaded,
-            total: total,
-            speed: speed,
-            eta: eta
-          });
+        if (!filePath || !fs.existsSync(filePath)) {
+          throw probeModule.makeError(
+            "The download finished but the file could not be found.",
+            filePath || "(no path reported)"
+          );
         }
-        return;
-      }
 
-      if (line.indexOf(FILEPATH_PREFIX) === 0) {
-        printedPath = line.slice(FILEPATH_PREFIX.length).trim();
-        return;
-      }
+        return { filePath: filePath, bytes: lastBytes };
+      });
+    }
 
-      if (options.onLog) {
-        options.onLog(line);
+    function cleanupSidecar() {
+      try {
+        fs.unlinkSync(sidecarPath);
+      } catch (error) {
+        /* nothing to remove */
       }
     }
 
-    var running = proc.run(ytdlp, buildArgs(options), {
-      onStdout: handleLine,
-      onStderr: handleLine
-    });
-
-    var promise = running.then(function (result) {
-      if (result.signal || result.code === null) {
-        throw probeModule.makeError("Cancelled.", "");
-      }
-      if (result.code !== 0) {
-        throw probeModule.makeError(
-          errors.explain(result.stderr + result.stdout, "The download failed."),
-          errors.firstErrorLine(result.stderr || result.stdout)
-        );
-      }
-
-      var filePath = resolveOutputPath(printedPath, result.stdout, result.stderr);
-      if (!filePath || !fs.existsSync(filePath)) {
-        throw probeModule.makeError(
-          "The download finished but the file could not be found.",
-          filePath || "(no path reported)"
-        );
-      }
-
-      return { filePath: filePath, bytes: lastBytes };
-    });
+    var promise = attempt(!!options.frameAccurate)
+      .catch(function (error) {
+        if (cancelled || !error.keyframeRetry) {
+          throw error;
+        }
+        if (options.onLog) {
+          options.onLog(
+            "Frame-accurate cutting crashed ffmpeg — retrying with a keyframe-aligned cut."
+          );
+        }
+        return attempt(false).catch(function (retryError) {
+          // The crash reproduces only on the anonymous fetch path — signed-in
+          // requests get formats ffmpeg can cut. So if dropping frame accuracy
+          // did not help either, cookies are the next thing worth trying.
+          if (!cancelled) {
+            retryError.tryCookies = true;
+          }
+          throw retryError;
+        });
+      })
+      .then(
+        function (result) {
+          cleanupSidecar();
+          return result;
+        },
+        function (error) {
+          cleanupSidecar();
+          throw error;
+        }
+      );
 
     promise.cancel = function () {
-      running.cancel();
+      cancelled = true;
+      if (current) {
+        current.cancel();
+      }
       cleanPartials(options.workDir);
     };
     return promise;

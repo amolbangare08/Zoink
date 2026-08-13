@@ -282,6 +282,9 @@ h1 {
   border: 1px solid var(--border-soft);
 }
 
+/* An author `display` rule outranks the UA sheet's [hidden] rule at equal
+   specificity, so hiding has to be spelled out for anything given a display. */
+.preview[hidden],
 .preview img[hidden] {
   display: none;
 }

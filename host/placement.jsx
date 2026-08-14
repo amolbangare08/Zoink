@@ -161,8 +161,42 @@ var ZoinkPlacement = (function () {
         }
     }
 
+    /**
+     * Highlight the item in the Project panel so the user can see what just
+     * arrived without hunting for it.
+     *
+     * ProjectItem.select() is the documented route on modern builds; the others
+     * are here because this API has shifted across versions and a failure to
+     * highlight must never fail the import. Returns the method that worked, or
+     * null if none did.
+     */
+    function selectInProject(projectItem) {
+        if (!projectItem) {
+            return null;
+        }
+
+        try {
+            if (typeof projectItem.select === "function") {
+                projectItem.select();
+                return "select";
+            }
+        } catch (e) {}
+
+        try {
+            if (typeof projectItem.setSelected === "function") {
+                // Second argument deselects everything else, so the new clip is
+                // the only thing highlighted.
+                projectItem.setSelected(true, true);
+                return "setSelected";
+            }
+        } catch (e2) {}
+
+        return null;
+    }
+
     return {
         ensureBin: ensureBin,
+        selectInProject: selectInProject,
         findItemByPath: findItemByPath,
         firstTargetedTrack: firstTargetedTrack,
         trackEndSeconds: trackEndSeconds,

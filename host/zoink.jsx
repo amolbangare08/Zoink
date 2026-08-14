@@ -143,10 +143,13 @@ var ZOINK = (function () {
 
         var mode = payload.insertMode || "playhead-overwrite";
         if (mode === "bin-only") {
+            var binOnlySelection = ZoinkPlacement.selectInProject(item);
             return reply({
                 ok: true,
                 placement: "bin-only",
                 binName: String(bin.name),
+                selected: !!binOnlySelection,
+                selectMethod: binOnlySelection,
                 message: "Imported into the " + bin.name + " bin."
             });
         }
@@ -160,6 +163,7 @@ var ZOINK = (function () {
                     ok: true,
                     placement: "new-sequence",
                     binName: String(bin.name),
+                    selected: !!ZoinkPlacement.selectInProject(item),
                     message: "No sequence was open, so a new one was created from the clip."
                 });
             } catch (e) {
@@ -167,6 +171,7 @@ var ZOINK = (function () {
                     ok: true,
                     placement: "bin-only",
                     binName: String(bin.name),
+                    selected: !!ZoinkPlacement.selectInProject(item),
                     message: "No sequence open — the clip is waiting in the " + bin.name + " bin."
                 });
             }
@@ -186,6 +191,9 @@ var ZOINK = (function () {
 
         ZoinkPlacement.placeClip(track, item, seconds, mode === "playhead-insert");
 
+        // Highlight after placing: placing can move the Project panel selection.
+        var selection = ZoinkPlacement.selectInProject(item);
+
         return reply({
             ok: true,
             placement: mode,
@@ -193,6 +201,8 @@ var ZOINK = (function () {
             sequenceName: String(sequence.name),
             trackName: String(track.name),
             atSeconds: seconds,
+            selected: !!selection,
+            selectMethod: selection,
             message: "Placed on " + track.name + " at " + seconds.toFixed(2) + "s."
         });
     });

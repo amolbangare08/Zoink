@@ -890,6 +890,18 @@
         setStep("timeline", "done");
         setProgress(1);
         log.good(placement.message);
+
+        if (placement.selected) {
+          log.muted("Highlighted in the " + placement.binName + " bin.");
+        } else {
+          // Not fatal, but worth saying — otherwise a silently missing highlight
+          // looks like the clip failed to import.
+          log.warn(
+            "Could not highlight the clip — find it in the " +
+              placement.binName +
+              " bin."
+          );
+        }
         setHeadline("Zoinked. " + placement.message, "ok");
         finishJob();
       })

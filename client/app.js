@@ -663,6 +663,11 @@
       element.disabled = running;
     });
     ui.settingsButton.disabled = running;
+    if (running) {
+      ui.rail.classList.add("working");
+    } else {
+      ui.rail.classList.remove("working");
+    }
     setStatus(running ? "working" : "ready", running ? "busy" : null);
   }
 

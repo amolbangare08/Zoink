@@ -165,12 +165,39 @@ h1 {
 }
 
 .step {
+  position: relative;
+  overflow: hidden;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius);
   background: var(--surface);
   padding: 14px 8px 16px;
   text-align: center;
   transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+
+/* Outcome glyph, parked in the corner so it cannot reflow the label —
+   "✓ TIMELINE" would wrap in a narrow panel. */
+.step::before {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 11px;
+  line-height: 1;
+  opacity: 0;
+}
+
+/* Activity shuttle: proof the running step is alive even when the byte count
+   stalls, which is common while yt-dlp negotiates formats. */
+.step::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 40%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: 0;
+  transform: translateX(-100%);
 }
 
 .step-index {
@@ -192,7 +219,11 @@ h1 {
 
 .step[data-state="active"] {
   border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent-glow), 0 0 18px -6px var(--accent);
+  animation: step-breathe 2s ease-in-out infinite;
+}
+.step[data-state="active"]::after {
+  opacity: 1;
+  animation: step-shuttle 1.4s ease-in-out infinite;
 }
 .step[data-state="active"] .step-label,
 .step[data-state="active"] .step-index {
@@ -201,6 +232,13 @@ h1 {
 
 .step[data-state="done"] {
   border-color: rgba(92, 224, 143, 0.45);
+  animation: step-pop 0.32s ease-out;
+}
+.step[data-state="done"]::before {
+  content: "✓";
+  color: var(--ok);
+  opacity: 1;
+  animation: glyph-in 0.3s ease-out;
 }
 .step[data-state="done"] .step-label {
   color: var(--ok);
@@ -208,9 +246,71 @@ h1 {
 
 .step[data-state="error"] {
   border-color: rgba(255, 77, 109, 0.6);
+  animation: step-shake 0.32s ease-in-out;
+}
+.step[data-state="error"]::before {
+  content: "✕";
+  color: var(--error);
+  opacity: 1;
+  animation: glyph-in 0.3s ease-out;
 }
 .step[data-state="error"] .step-label {
   color: var(--error);
+}
+
+@keyframes step-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px var(--accent-glow), 0 0 14px -8px var(--accent);
+  }
+  50% {
+    box-shadow: 0 0 0 1px var(--accent-glow), 0 0 26px -4px var(--accent);
+  }
+}
+
+@keyframes step-shuttle {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+@keyframes step-pop {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.035);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes step-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-3px);
+  }
+  75% {
+    transform: translateX(3px);
+  }
+}
+
+@keyframes glyph-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* ---------- progress rail ---------- */
@@ -224,11 +324,31 @@ h1 {
 }
 
 .rail-fill {
+  position: relative;
+  overflow: hidden;
   height: 100%;
   width: 0;
   border-radius: 4px;
   background: linear-gradient(90deg, var(--accent-dim), var(--accent));
   transition: width 0.25s ease;
+}
+
+/* A sheen travelling along the filled portion, so a percentage that sits still
+   for a while still looks like work in progress rather than a hang. */
+.rail.working .rail-fill::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.35),
+    transparent
+  );
+  animation: rail-sheen 1.2s linear infinite;
 }
 
 .rail.indeterminate .rail-fill {
@@ -242,6 +362,36 @@ h1 {
   }
   100% {
     transform: translateX(300%);
+  }
+}
+
+@keyframes rail-sheen {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* Motion here is informational, not decorative, so the reduced-motion fallback
+   keeps the static colour states rather than removing the cue entirely. */
+@media (prefers-reduced-motion: reduce) {
+  .step,
+  .step::after,
+  .step::before,
+  .rail-fill,
+  .rail.working .rail-fill::after,
+  .rail.indeterminate .rail-fill {
+    animation: none !important;
+  }
+  .step[data-state="active"] {
+    box-shadow: 0 0 0 1px var(--accent-glow), 0 0 18px -6px var(--accent);
+  }
+  .step[data-state="active"]::after {
+    opacity: 1;
+    transform: translateX(0);
+    width: 100%;
   }
 }
 

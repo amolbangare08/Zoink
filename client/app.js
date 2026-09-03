@@ -915,6 +915,32 @@
       });
   }
 
+  /**
+   * Sharpen a failure message with context the error itself cannot see.
+   *
+   * A block with cookies already on is almost never a missing session — it is an
+   * extractor that has aged out. Telling the user to enable cookies they have
+   * already enabled is the least useful thing the panel can say.
+   */
+  function refineFailure(error, message) {
+    var signature = ((error && error.raw) || "") + " " + message;
+    if (!errorsModule.isAuthWall(signature) || !settings.useCookies) {
+      return message;
+    }
+    var age = tools.ytdlpAgeDays();
+    if (age !== null && age > 21) {
+      return (
+        "Blocked, and cookies are already on — yt-dlp is " + age +
+        " days old, so its extractor is most likely out of date. " +
+        'Open Settings and run "Check for yt-dlp updates".'
+      );
+    }
+    return (
+      "Blocked even with cookies on. If this keeps happening, update yt-dlp " +
+      "from Settings — YouTube changes often break older builds."
+    );
+  }
+
   function handleFailure(error, cancelled) {
     var message = (error && (error.friendly || error.message)) || String(error);
     ui.rail.classList.remove("indeterminate");
@@ -930,8 +956,9 @@
       log.warn("Cancelled by user.");
       setProgress(0);
     } else {
-      setHeadline(message, "error");
-      log.error(message);
+      var refined = refineFailure(error, message);
+      setHeadline(refined, "error");
+      log.error(refined);
       if (error && error.raw) {
         log.muted(error.raw);
       }
